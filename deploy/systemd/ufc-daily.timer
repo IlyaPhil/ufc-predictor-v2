@@ -1,0 +1,11 @@
+[Unit]
+Description=UFC predictor: daily data update timer
+
+[Timer]
+# Зеркало ufcstats обновляется около 21:00 МСК
+OnCalendar=*-*-* 22:00
+# Если ПК был выключен в 22:00 — запустить вскоре после включения
+Persistent=true
+
+[Install]
+WantedBy=timers.target

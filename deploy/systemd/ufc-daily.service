@@ -1,0 +1,12 @@
+[Unit]
+Description=UFC predictor: daily data update (history + snapshots from GitHub)
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/neuralist/AI/ufc-predictor
+# Сразу после включения ПК сети может еще не быть — ждем до 5 минут
+ExecStartPre=/bin/sh -c 'for i in $(seq 30); do getent hosts github.com >/dev/null && exit 0; sleep 10; done; exit 1'
+ExecStartPre=/bin/date --iso-8601=seconds
+ExecStart=/home/neuralist/AI/ai-env/bin/python -m ufc.cli daily
+StandardOutput=append:/home/neuralist/AI/ufc-predictor/logs/daily.log
+StandardError=append:/home/neuralist/AI/ufc-predictor/logs/daily.log

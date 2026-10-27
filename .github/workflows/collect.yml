@@ -1,5 +1,6 @@
 # Снимки карда (ESPN) и коэффициентов (bestfightodds) по расписанию.
-# Снимки коммитятся в ветку snapshots (без общей истории с кодом),
+# Снимки коммитятся в ветку snapshots (без общей истории с кодом; корень ветки —
+# корень снимков: espn/, bestfightodds/ — локально она подключается как data/snapshots),
 # сырой HTML сохраняется артефактом на 90 дней для возможного перепарсинга.
 name: collect-snapshots
 
@@ -41,7 +42,7 @@ jobs:
 
       - name: Снять кард и коэффициенты
         env:
-          UFC_SNAPSHOT_DIR: snapshots-branch/snapshots
+          UFC_SNAPSHOT_DIR: snapshots-branch
         run: python -m ufc.cli collect
 
       # Выполняется, даже если один из источников упал: снимки остальных не теряются
@@ -51,7 +52,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add snapshots
+          git add -A
           git diff --cached --quiet || git commit -m "snapshots $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push origin snapshots
 

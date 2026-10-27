@@ -4,9 +4,12 @@
 Сбор снимков (collect) и загрузка в БД (load-snapshots) разделены:
 collect не трогает БД и может работать в облаке, загрузка выполняется локально
 """
+import subprocess
+
 import typer
 
 from ufc import checks, snapshots
+from ufc.config import SNAPSHOT_DIR
 from ufc.db import connect, init_db, sync_run
 from ufc.http import PoliteSession
 from ufc.sources import bestfightodds, espn, ufcstats_mirror
@@ -47,6 +50,17 @@ def _collect() -> list[str]:
     return failed
 
 
+def _pull_snapshots() -> None:
+    """
+    Подтягивает свежие снимки из GitHub, если data/snapshots — рабочая папка ветки snapshots
+    """
+    if not (SNAPSHOT_DIR / ".git").exists():
+        typer.echo(f"[pull-snapshots] {SNAPSHOT_DIR} не подключена к ветке snapshots, пропускаю")
+        return
+    subprocess.run(["git", "-C", str(SNAPSHOT_DIR), "pull", "--ff-only", "--quiet"], check=True)
+    typer.echo("[pull-snapshots] ok")
+
+
 def _load_snapshots() -> None:
     conn = _db()
     with sync_run(conn, "load-snapshots") as run:
@@ -75,12 +89,12 @@ def load_snapshots():
 
 @app.command()
 def daily():
-    """История + снимки + загрузка — для локального запуска по расписанию."""
+    """Локальное обновление по расписанию: история + свежие снимки из GitHub + загрузка в БД.
+    Сами снимки собирает GitHub Actions (collect), поэтому здесь collect не вызывается."""
     ok = True
-    for step in (_sync_history, _collect, _load_snapshots):
+    for step in (_sync_history, _pull_snapshots, _load_snapshots):
         try:
-            result = step()
-            ok = ok and not result
+            step()
         except Exception as exc:
             ok = False
             typer.echo(f"[{step.__name__}] ERROR: {exc!r}", err=True)

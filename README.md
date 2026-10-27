@@ -25,5 +25,21 @@ python -m ufc.cli status           # сводка по БД
 python -m ufc.cli unresolved       # имена, не сопоставленные с бойцами
 ```
 
+## Расписание
+
+- **Облако** ([.github/workflows/collect.yml](.github/workflows/collect.yml)): GitHub Actions ежедневно
+  (в субботу — каждые 3 часа) запускает `collect` и коммитит снимки в ветку `snapshots`.
+- **Локально**: ветка `snapshots` подключена как `data/snapshots`
+  (`git worktree add data/snapshots snapshots`), а systemd-таймер ежедневно в 22:00
+  (или после включения ПК, если время пропущено) запускает `daily`: история + `git pull` снимков + загрузка в БД.
+  Лог — `logs/daily.log`.
+
+```bash
+cp deploy/systemd/ufc-daily.* ~/.config/systemd/user/ && systemctl --user daemon-reload
+systemctl --user enable --now ufc-daily.timer    # включить
+systemctl --user list-timers ufc-daily.timer     # когда следующий запуск
+systemctl --user disable --now ufc-daily.timer   # отключить
+```
+
 Неоднозначные имена бойцов разрешаются вручную в
 [data/manual/fighter_aliases.csv](data/manual/fighter_aliases.csv) — с указанием, на чем основано решение.
