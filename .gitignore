@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# БД и сырые снимки источников не храним в git — они воспроизводятся пайплайном
+data/*
+!data/manual/
+logs/
