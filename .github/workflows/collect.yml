@@ -1,0 +1,64 @@
+# Снимки карда (ESPN) и коэффициентов (bestfightodds) по расписанию.
+# Снимки коммитятся в ветку snapshots (без общей истории с кодом),
+# сырой HTML сохраняется артефактом на 90 дней для возможного перепарсинга.
+name: collect-snapshots
+
+on:
+  schedule:
+    - cron: "17 12 * * *"    # ежедневно
+    - cron: "17 */3 * * 6"   # в субботу каждые 3 часа — ловим линию закрытия
+    - cron: "17 0,3 * * 0"   # ночь на воскресенье по UTC — главные бои турниров в США
+  workflow_dispatch:         # ручной запуск из вкладки Actions
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-snapshots
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Подключить ветку snapshots (создать при первом запуске)
+        run: |
+          if git fetch --depth=1 origin snapshots:refs/remotes/origin/snapshots; then
+            git worktree add -B snapshots snapshots-branch origin/snapshots
+          else
+            git worktree add --orphan -b snapshots snapshots-branch
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Снять кард и коэффициенты
+        env:
+          UFC_SNAPSHOT_DIR: snapshots-branch/snapshots
+        run: python -m ufc.cli collect
+
+      # Выполняется, даже если один из источников упал: снимки остальных не теряются
+      - name: Закоммитить снимки
+        if: always()
+        working-directory: snapshots-branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add snapshots
+          git diff --cached --quiet || git commit -m "snapshots $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push origin snapshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: raw-${{ github.run_id }}
+          path: data/raw
+          retention-days: 90
+          if-no-files-found: ignore
