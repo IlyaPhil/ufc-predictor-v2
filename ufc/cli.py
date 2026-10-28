@@ -8,7 +8,7 @@ import subprocess
 
 import typer
 
-from ufc import checks, snapshots
+from ufc import checks, links, snapshots
 from ufc.config import SNAPSHOT_DIR
 from ufc.db import connect, init_db, sync_run
 from ufc.http import PoliteSession
@@ -68,6 +68,13 @@ def _load_snapshots() -> None:
     typer.echo(f"[load-snapshots] {run['details']}")
 
 
+def _link() -> None:
+    conn = _db()
+    with sync_run(conn, "link") as run:
+        run["details"] = links.rebuild(conn)
+    typer.echo(f"[link] {run['details']}")
+
+
 @app.command("sync-history")
 def sync_history():
     """Перезалить историю боев из зеркала ufcstats и прогнать проверки качества."""
@@ -88,11 +95,17 @@ def load_snapshots():
 
 
 @app.command()
+def link():
+    """Связать снимки ESPN и bestfightodds с боями ufcstats и пересчитать линию закрытия."""
+    _link()
+
+
+@app.command()
 def daily():
-    """Локальное обновление по расписанию: история + свежие снимки из GitHub + загрузка в БД.
+    """Локальное обновление по расписанию: история + свежие снимки из GitHub + загрузка в БД + связка.
     Сами снимки собирает GitHub Actions (collect), поэтому здесь collect не вызывается."""
     ok = True
-    for step in (_sync_history, _pull_snapshots, _load_snapshots):
+    for step in (_sync_history, _pull_snapshots, _load_snapshots, _link):
         try:
             step()
         except Exception as exc:

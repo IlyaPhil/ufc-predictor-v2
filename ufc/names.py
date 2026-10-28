@@ -19,6 +19,25 @@ MANUAL_ALIASES_PATH = MANUAL_DIR / "fighter_aliases.csv"
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv"}
 
+# Уменьшительные формы имен: 'Alex Hernandez' = 'Alexander Hernandez'.
+# Закрытый словарь — сравниваем только явные пары, а не «похожесть» строк
+NAME_FORMS = [
+    {"alex", "alexander", "alexandre", "aleksandr", "aleksander"}, {"zach", "zachary", "zack"},
+    {"cam", "cameron"}, {"nick", "nicholas", "nicolas", "nico"}, {"joe", "joseph", "joey"},
+    {"mike", "michael"}, {"matt", "matthew"}, {"chris", "christopher"}, {"dan", "daniel", "danny"},
+    {"dave", "david"}, {"jim", "james", "jimmy", "jimmie"}, {"tom", "thomas", "tommy"},
+    {"tony", "anthony"}, {"rob", "robert", "bob", "bobby", "robbie"}, {"will", "william", "bill", "billy"},
+    {"ben", "benjamin"}, {"sam", "samuel"}, {"andy", "andrew"}, {"steve", "steven", "stephen"},
+    {"jon", "jonathan"}, {"johnny", "john"}, {"ed", "eddie", "edward"}, {"greg", "gregory"},
+    {"jeff", "jeffrey"}, {"josh", "joshua"}, {"jake", "jacob"}, {"ken", "kenny", "kenneth"},
+    {"rick", "ricky", "richard", "rich"}, {"ray", "raymond"}, {"charlie", "charles", "chuck"},
+    {"pat", "patrick"}, {"phil", "phillip", "philip"}, {"tim", "timothy"}, {"vince", "vincent"},
+    {"nate", "nathan", "nathaniel"}, {"ron", "ronald", "ronnie"}, {"don", "donald"},
+    {"gabe", "gabriel"}, {"manny", "manuel"}, {"rafa", "rafael"}, {"max", "maxim", "maximilian"},
+    {"sergey", "sergei"}, {"dmitry", "dmitriy", "dmitrii"}, {"yuri", "yury"},
+]
+_CANONICAL_FORM = {form: min(group) for group in NAME_FORMS for form in group}
+
 # Лимиты весовых категорий, фунты
 WEIGHT_LIMITS = {
     "Strawweight": 115, "Women's Strawweight": 115,
@@ -47,6 +66,17 @@ def compact(name: str) -> str:
     return normalize(name).replace(" ", "")
 
 
+def name_form_key(name: str) -> str | None:
+    """
+    Ключ с канонической формой имени: 'Alex Hernandez' и 'Alexander Hernandez' -> 'alex hernandez'.
+    None, если первое имя не из словаря
+    """
+    tokens = normalize(name).split()
+    if len(tokens) < 2 or tokens[0] not in _CANONICAL_FORM:
+        return None
+    return " ".join([_CANONICAL_FORM[tokens[0]], *tokens[1:]])
+
+
 def placeholder_id(name: str) -> str:
     return "unk:" + compact(name)
 
@@ -61,7 +91,7 @@ class Resolution:
 class NameResolver:
     """
     Разрешает имя в id бойца по цепочке правил: ручной алиас -> точное имя ->
-    нормализованное имя -> имя как подмножество токенов. На каждом шаге
+    нормализованное имя -> уменьшительная форма имени -> имя как подмножество токенов. На каждом шаге
     несколько кандидатов сужаются по весу, если известна весовая категория
     """
     def __init__(self, fighters: list[tuple[str, str, float | None, str | None]], manual: dict[tuple[str, str], str]):
@@ -72,10 +102,13 @@ class NameResolver:
         self.manual = manual
         self.by_exact: dict[str, list[str]] = {}
         self.by_compact: dict[str, list[str]] = {}
+        self.by_name_form: dict[str, list[str]] = {}
         self.tokens: dict[str, set[str]] = {}
         for fid, name, _, _ in fighters:
             self.by_exact.setdefault(name.strip(), []).append(fid)
             self.by_compact.setdefault(compact(name), []).append(fid)
+            if key := name_form_key(name):
+                self.by_name_form.setdefault(key, []).append(fid)
             self.tokens[fid] = set(normalize(name).split())
 
     @classmethod
@@ -127,8 +160,10 @@ class NameResolver:
         if ("*", name) in self.manual:
             return Resolution(self.manual[("*", name)], "manual")
 
+        form_key = name_form_key(name)
         for ids, method in ((self.by_exact.get(name, []), "exact"),
-                            (self.by_compact.get(compact(name), []), "normalized")):
+                            (self.by_compact.get(compact(name), []), "normalized"),
+                            (self.by_name_form.get(form_key, []) if form_key else [], "name_form")):
             res = self._pick(ids, method, weight_class, on_date)
             if res:
                 return res

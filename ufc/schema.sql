@@ -132,6 +132,31 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
 );
 
 -- ---------------------------------------------------------------------------
+-- Связь снимков с боями ufcstats. Производные таблицы: пересчитываются целиком
+-- при каждом daily, поэтому без внешних ключей (bouts тоже перезаливается)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS bout_links (
+    source       TEXT NOT NULL,         -- 'espn' / 'bestfightodds'
+    external_id  TEXT NOT NULL,         -- espn_bout_id / matchup_id
+    bout_id      TEXT NOT NULL,         -- bouts.id
+    a_is_red     INTEGER NOT NULL,      -- 1, если fighter_a источника — красный угол
+    PRIMARY KEY (source, external_id)
+);
+CREATE INDEX IF NOT EXISTS ix_bout_links_bout ON bout_links(bout_id);
+
+-- Линия закрытия по ежедневным снимкам: последний снимок каждого букмекера
+-- строго до начала турнира (время начала карда из ESPN, иначе полночь UTC даты турнира)
+CREATE TABLE IF NOT EXISTS bout_closing_odds (
+    bout_id      TEXT NOT NULL,
+    bookmaker    TEXT NOT NULL,
+    captured_at  TEXT NOT NULL,         -- время снимка, из которого взята линия
+    odds_red     INTEGER,               -- американский формат
+    odds_blue    INTEGER,
+    PRIMARY KEY (bout_id, bookmaker)
+);
+
+-- ---------------------------------------------------------------------------
 -- Сопоставление имен из разных источников с id бойца
 -- ---------------------------------------------------------------------------
 
